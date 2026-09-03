@@ -6,7 +6,7 @@
 
 ## Live Demo
 
-[Preprod demo URL — add after deploying the frontend]
+[Open the Vickrey Preprod demo](https://midnight-vickrey.vercel.app)
 
 ## Contract Address
 

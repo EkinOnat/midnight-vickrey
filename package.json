@@ -16,7 +16,7 @@
     "deploy:preprod": "tsx src/deploy.ts"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": "22.x"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-runtime": "0.16.0",

@@ -1,7 +1,6 @@
 # Vickrey Launch Posts
 
-Replace `[PREPROD_DEMO_URL]` with the deployed frontend URL before posting the
-third message.
+The production demo is live at `https://midnight-vickrey.vercel.app`.
 
 ## Tweet 1 — Product and Midnight
 
@@ -21,5 +20,5 @@ go on-chain. #ZK
 
 VICKREY is live on Midnight Preprod. Connect Lace, submit a sealed bid, save
 your private opening package, and watch a second-price result become publicly
-provable—without publishing the bid book. Try it: [PREPROD_DEMO_URL]
+provable—without publishing the bid book. Try it: https://midnight-vickrey.vercel.app
 #MidnightNetwork
