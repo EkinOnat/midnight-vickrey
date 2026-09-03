@@ -1,0 +1,13 @@
+node_modules/
+dist/
+public/managed/
+*.tsbuildinfo
+.env
+.env.local
+.DS_Store
+Thumbs.db
+coverage/
+vickrey-state/
+midnight-level-db/
+.midnight-state*.json
+.midnight-wallet-state/

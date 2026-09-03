@@ -1,0 +1,300 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   VICKREY — sealed-bid second-price settlement without a trusted result
+   ──────────────────────────────────────────────────────────────────────────
+
+   This Level 4 contract implements one bounded auction with at most four bids.
+   The bound keeps the proving circuit finite and auditable; the auction-house
+   lifecycle, deadlines, deposits and sponsored fees belong to later levels.
+
+   PUBLIC (replicated on the Midnight ledger)
+     auctionId, reservePrice, phase and bidCount;
+     one opaque commitment and one auction-scoped pseudonym per bid slot;
+     after settlement: the winner pseudonym, clearing price and result digest.
+
+   PRIVATE (provided by witnesses and never written to the ledger)
+     each bidder's amount, random salt and secret key;
+     the settlement book containing every amount and salt;
+     the auction creator's secret key used to authorize settlement.
+
+   WHAT THE PROOF ESTABLISHES
+     Every opening in the settlement book hashes to the commitment locked in
+     its original slot; every admitted amount meets the public reserve; the
+     published winner is the highest bid (earliest commitment wins a tie); and
+     the published clearing price is exactly the second-highest bid.
+
+   DELIBERATE DISCLOSURES
+     submitBid discloses only an auction-scoped bidder tag and a one-way bid
+     commitment. settle discloses only commitment hashes already on-chain, the
+     winner tag, the second price, and a digest of that public result. The
+     winner's amount and all losing amounts remain private. The clearing price
+     necessarily equals one losing bid's amount, but its owner is not revealed.
+
+   SETTLEMENT AVAILABILITY
+     The auction creator must receive each bidder's opening package off-chain
+     so it can be supplied as one private witness at settlement. The creator
+     learns those openings in this Level 4 prototype, but cannot forge the
+     public outcome: the zero-knowledge proof binds it to the pre-close ledger
+     commitments. Threshold/decentralized opening is a future enhancement.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+export enum AuctionPhase { OPEN, SETTLED }
+
+export struct BidOpening {
+  amount: Uint<64>;
+  salt: Bytes<32>;
+}
+
+export struct Ranking {
+  highest: Uint<64>;
+  second: Uint<64>;
+  winnerTag: Bytes<32>;
+}
+
+// ─── Public ledger state ───────────────────────────────────────────────────
+
+export ledger auctionId: Bytes<32>;
+export ledger reservePrice: Uint<64>;
+export ledger phase: AuctionPhase;
+export ledger bidCount: Counter;
+export ledger commitments: Map<Field, Bytes<32>>;
+export ledger bidderTags: Map<Field, Bytes<32>>;
+export ledger usedBidderTags: Set<Bytes<32>>;
+export ledger winnerTag: Bytes<32>;
+export ledger clearingPrice: Uint<64>;
+export ledger resultDigest: Bytes<32>;
+export ledger admin: Bytes<32>;
+
+// ─── Private witnesses ─────────────────────────────────────────────────────
+
+witness localSecretKey(): Bytes<32>;
+witness privateBid(): BidOpening;
+witness settlementBook(): Vector<4, BidOpening>;
+
+// ─── Construction ──────────────────────────────────────────────────────────
+
+constructor(_auctionId: Bytes<32>, _reservePrice: Uint<64>) {
+  assert(_reservePrice > 0, "reserve price must be positive");
+
+  auctionId = disclose(_auctionId);
+  reservePrice = disclose(_reservePrice);
+  phase = AuctionPhase.OPEN;
+  admin = disclose(deriveAdmin(localSecretKey()));
+}
+
+// ─── Pure privacy helpers ──────────────────────────────────────────────────
+
+export pure circuit deriveAdmin(secret: Bytes<32>): Bytes<32> {
+  return persistentHash<[Bytes<16>, Bytes<32>]>([
+    "vickrey:admin:v1",
+    secret,
+  ]);
+}
+
+export pure circuit deriveBidderTag(
+  secret: Bytes<32>,
+  id: Bytes<32>,
+): Bytes<32> {
+  return persistentHash<[Bytes<14>, Bytes<32>, Bytes<32>]>([
+    "vickrey:tag:v1",
+    id,
+    secret,
+  ]);
+}
+
+export pure circuit bidCommitment(
+  id: Bytes<32>,
+  slot: Field,
+  tag: Bytes<32>,
+  amount: Uint<64>,
+  salt: Bytes<32>,
+): Bytes<32> {
+  return persistentHash<[
+    Bytes<14>,
+    Bytes<32>,
+    Field,
+    Bytes<32>,
+    Uint<64>,
+    Bytes<32>
+  ]>(["vickrey:bid:v1", id, slot, tag, amount, salt]);
+}
+
+// Functional ranking avoids mutable private variables. A strictly greater
+// amount replaces the winner, so equal bids preserve the earliest slot.
+export pure circuit rankCandidate(
+  ranking: Ranking,
+  amount: Uint<64>,
+  tag: Bytes<32>,
+): Ranking {
+  return amount > ranking.highest
+    ? Ranking {
+        highest: amount,
+        second: ranking.highest,
+        winnerTag: tag,
+      }
+    : Ranking {
+        highest: ranking.highest,
+        second: amount > ranking.second ? amount : ranking.second,
+        winnerTag: ranking.winnerTag,
+      };
+}
+
+export pure circuit publicResultDigest(
+  id: Bytes<32>,
+  tag: Bytes<32>,
+  price: Uint<64>,
+  count: Field,
+): Bytes<32> {
+  return persistentHash<[
+    Bytes<17>,
+    Bytes<32>,
+    Bytes<32>,
+    Uint<64>,
+    Field
+  ]>(["vickrey:result:v1", id, tag, price, count]);
+}
+
+// ─── Contract circuits ─────────────────────────────────────────────────────
+
+export circuit submitBid(): [] {
+  assert(phase == AuctionPhase.OPEN, "auction is not open");
+  assert(bidCount < 4, "auction already has four bids");
+
+  const opening = privateBid();
+  assert(opening.amount >= reservePrice, "bid is below the reserve price");
+
+  // The tag is stable only inside this auction and reveals no wallet address.
+  const tag = disclose(deriveBidderTag(localSecretKey(), auctionId));
+  assert(!usedBidderTags.member(tag), "this bidder already committed");
+
+  const slot = bidCount as Field;
+  const commitment = disclose(
+    bidCommitment(auctionId, slot, tag, opening.amount, opening.salt)
+  );
+
+  commitments.insert(slot, commitment);
+  bidderTags.insert(slot, tag);
+  usedBidderTags.insert(tag);
+  bidCount.increment(1);
+}
+
+export circuit settle(): [] {
+  assert(phase == AuctionPhase.OPEN, "auction is already settled");
+  assert(bidCount >= 2, "at least two bids are required");
+  assert(
+    admin == disclose(deriveAdmin(localSecretKey())),
+    "only the auction creator may settle"
+  );
+
+  const book = settlementBook();
+
+  // Each active private opening must reproduce the commitment and must still
+  // satisfy the reserve rule. Hash disclosure is safe: that hash is already
+  // present in public ledger state.
+  assert(book[0].amount >= reservePrice, "bid 0 is below reserve");
+  assert(
+    commitments.lookup(0) == disclose(
+      bidCommitment(
+        auctionId,
+        0,
+        bidderTags.lookup(0),
+        book[0].amount,
+        book[0].salt
+      )
+    ),
+    "opening 0 does not match its commitment"
+  );
+
+  assert(book[1].amount >= reservePrice, "bid 1 is below reserve");
+  assert(
+    commitments.lookup(1) == disclose(
+      bidCommitment(
+        auctionId,
+        1,
+        bidderTags.lookup(1),
+        book[1].amount,
+        book[1].salt
+      )
+    ),
+    "opening 1 does not match its commitment"
+  );
+
+  if (bidCount >= 3) {
+    assert(book[2].amount >= reservePrice, "bid 2 is below reserve");
+    assert(
+      commitments.lookup(2) == disclose(
+        bidCommitment(
+          auctionId,
+          2,
+          bidderTags.lookup(2),
+          book[2].amount,
+          book[2].salt
+        )
+      ),
+      "opening 2 does not match its commitment"
+    );
+  }
+
+  if (bidCount >= 4) {
+    assert(book[3].amount >= reservePrice, "bid 3 is below reserve");
+    assert(
+      commitments.lookup(3) == disclose(
+        bidCommitment(
+          auctionId,
+          3,
+          bidderTags.lookup(3),
+          book[3].amount,
+          book[3].salt
+        )
+      ),
+      "opening 3 does not match its commitment"
+    );
+  }
+
+  // Inactive vector cells become zero-valued dummies. Valid bids are positive,
+  // so they can never disturb the top-two ranking.
+  const amount2: Uint<64> = bidCount >= 3 ? book[2].amount : 0;
+  const amount3: Uint<64> = bidCount >= 4 ? book[3].amount : 0;
+  const tag2: Bytes<32> = bidCount >= 3
+    ? bidderTags.lookup(2)
+    : default<Bytes<32>>;
+  const tag3: Bytes<32> = bidCount >= 4
+    ? bidderTags.lookup(3)
+    : default<Bytes<32>>;
+
+  const ranking0 = Ranking {
+    highest: book[0].amount,
+    second: 0,
+    winnerTag: bidderTags.lookup(0),
+  };
+  const ranking1 = rankCandidate(
+    ranking0,
+    book[1].amount,
+    bidderTags.lookup(1)
+  );
+  const ranking2 = rankCandidate(
+    ranking1,
+    amount2,
+    tag2
+  );
+  const finalRanking = rankCandidate(
+    ranking2,
+    amount3,
+    tag3
+  );
+
+  winnerTag = disclose(finalRanking.winnerTag);
+  clearingPrice = disclose(finalRanking.second);
+  resultDigest = disclose(
+    publicResultDigest(
+      auctionId,
+      finalRanking.winnerTag,
+      finalRanking.second,
+      bidCount as Field
+    )
+  );
+  phase = AuctionPhase.SETTLED;
+}
