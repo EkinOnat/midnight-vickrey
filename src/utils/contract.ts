@@ -185,25 +185,36 @@ function storagePassword(): string {
 
 export interface DiscoveredWallet {
   readonly id: string;
-  readonly api: InitialAPI;
+  readonly rdns: string;
   readonly name: string;
   readonly icon: string;
+  readonly apiVersion: string;
+}
+
+function injectedWallets(): Record<string, InitialAPI> {
+  if (typeof window === 'undefined') return {};
+  return (
+    window as unknown as { midnight?: Record<string, InitialAPI> }
+  ).midnight ?? {};
 }
 
 export function discoverWallets(): DiscoveredWallet[] {
-  if (typeof window === 'undefined') return [];
-  const injected = (
-    window as unknown as { midnight?: Record<string, InitialAPI> }
-  ).midnight;
-  if (!injected) return [];
-  return Object.entries(injected)
-    .filter(([, api]) => typeof api?.connect === 'function')
-    .map(([id, api]) => ({
-      id,
-      api,
-      name: typeof api.name === 'string' ? api.name : id,
-      icon: typeof api.icon === 'string' ? api.icon : '',
-    }));
+  return Object.entries(injectedWallets()).flatMap(([id, api]) => {
+    try {
+      if (typeof api?.connect !== 'function') return [];
+      return [{
+        id,
+        rdns: typeof api.rdns === 'string' ? api.rdns : id,
+        name: typeof api.name === 'string' ? api.name : id,
+        icon: typeof api.icon === 'string' ? api.icon : '',
+        apiVersion: typeof api.apiVersion === 'string' ? api.apiVersion : '',
+      }];
+    } catch {
+      // An extension can leave a closed proxy behind after it reloads. Ignore it;
+      // a fresh API entry may be injected alongside it.
+      return [];
+    }
+  });
 }
 
 export async function waitForWallets(
@@ -228,30 +239,73 @@ function connectorError(error: unknown): APIError | null {
   return null;
 }
 
+function errorText(error: unknown): string {
+  const parts: string[] = [];
+  let current = error;
+  for (let hop = 0; current && hop < 8; hop += 1) {
+    if (current instanceof Error && current.message && current.message !== 'Error') {
+      parts.push(current.message);
+    }
+    if (typeof current === 'object') {
+      const reason = (current as { reason?: unknown }).reason;
+      if (typeof reason === 'string') parts.push(reason);
+      current = (current as { cause?: unknown }).cause;
+    } else {
+      break;
+    }
+  }
+  return parts.join(' ');
+}
+
+export function isClosedWalletChannel(error: unknown): boolean {
+  return /remote api.*shut(?:down|\s+down)|object can no longer be used|extension context invalidated|message port closed|receiving end does not exist/i.test(
+    errorText(error),
+  );
+}
+
 export function errorMessage(
   error: unknown,
   fallback = 'The operation did not complete.',
 ): string {
   const apiError = connectorError(error);
+  if (isClosedWalletChannel(error)) {
+    return 'Lace restarted or updated, so this page\'s wallet connection expired. Reload the page, unlock Lace on Preprod, then connect again.';
+  }
   if (apiError?.code === 'Rejected' || apiError?.code === 'PermissionRejected') {
     return 'The request was rejected in the wallet.';
   }
-  if (apiError?.reason) return apiError.reason;
-  let current = error;
-  let message = '';
-  for (let hop = 0; current && hop < 8; hop += 1) {
-    if (current instanceof Error && current.message && current.message !== 'Error') {
-      message = current.message;
-    }
-    current = (current as { cause?: unknown })?.cause;
+  if (apiError?.code === 'Disconnected') {
+    return 'The Lace connection was lost. Reload the page, unlock Lace on Preprod, then connect again.';
   }
-  return message || fallback;
+  if (apiError?.reason) return apiError.reason;
+  return errorText(error) || fallback;
+}
+
+function currentWalletApi(wallet: DiscoveredWallet): InitialAPI {
+  const entries = Object.entries(injectedWallets());
+  const exact = entries.find(([id]) => id === wallet.id);
+  const matchingWallet = entries
+    .filter(([, api]) => {
+      try {
+        return api.rdns === wallet.rdns && typeof api.connect === 'function';
+      } catch {
+        return false;
+      }
+    })
+    .at(-1);
+  const api = matchingWallet?.[1] ?? exact?.[1];
+  if (!api || typeof api.connect !== 'function') {
+    throw new Error(`${wallet.name} is no longer available. Reload the page and try again.`);
+  }
+  return api;
 }
 
 export async function connectWallet(
   wallet: DiscoveredWallet,
 ): Promise<{ api: ConnectedAPI; networkId: string }> {
-  const api = await wallet.api.connect(TARGET_NETWORK);
+  // Resolve the injected object at click time. Browser extensions can restart
+  // their service worker, making a proxy captured during discovery unusable.
+  const api = await currentWalletApi(wallet).connect(TARGET_NETWORK);
   const status = await api.getConnectionStatus();
   if (status.status !== 'connected') throw new Error('The wallet disconnected.');
   if (status.networkId !== TARGET_NETWORK) {

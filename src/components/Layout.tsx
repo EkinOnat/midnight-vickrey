@@ -30,6 +30,13 @@ export function Layout({
       {session.error ? (
         <div className="notice error" role="alert">
           <strong>Wallet</strong> {session.error}
+          <button
+            className="text-button notice-action"
+            type="button"
+            onClick={() => window.location.reload()}
+          >
+            Reload page
+          </button>
         </div>
       ) : null}
 

@@ -120,6 +120,7 @@ code, .kicker, .panel-number, .local-only, dt, .phase, .proof-strip > span {
   font-size: 13px;
 }
 .notice strong { color: var(--danger); margin-right: 10px; text-transform: uppercase; }
+.notice-action { margin-left: 14px; white-space: nowrap; }
 .notice.inline { margin: 18px 0 0; }
 
 main { padding: 0 clamp(20px, 4vw, 64px) 64px; }

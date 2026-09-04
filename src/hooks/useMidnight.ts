@@ -64,6 +64,7 @@ export function useMidnight(): MidnightSession {
 
   const providersRef = useRef<VickreyProviders | null>(null);
   const publicProviderRef = useRef<PublicDataProvider | null>(null);
+  const connectingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -115,18 +116,26 @@ export function useMidnight(): MidnightSession {
 
   const connect = useCallback(
     async (preferred?: DiscoveredWallet) => {
+      if (connectingRef.current) return;
+      connectingRef.current = true;
       setError(null);
       if (!isConfigured) {
         setError('Deploy first, then set VITE_CONTRACT_ADDRESS and rebuild.');
         setStatus('error');
+        connectingRef.current = false;
         return;
       }
       setStatus('connecting');
       try {
-        const available = preferred ? [preferred] : await waitForWallets();
+        const available = await waitForWallets();
         setWallets(available);
         const wallet =
-          preferred ??
+          (preferred
+            ? available.find(
+                (candidate) =>
+                  candidate.id === preferred.id || candidate.rdns === preferred.rdns,
+              )
+            : undefined) ??
           available.find((candidate) => /lace/i.test(candidate.name)) ??
           available[0];
         if (!wallet) throw new Error('No Midnight wallet was detected.');
@@ -153,6 +162,8 @@ export function useMidnight(): MidnightSession {
         setContract(null);
         setStatus('error');
         setError(errorMessage(cause, 'Wallet connection failed.'));
+      } finally {
+        connectingRef.current = false;
       }
     },
     [readFrom],
