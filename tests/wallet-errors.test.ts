@@ -4,6 +4,7 @@ import {
   errorMessage,
   hintWalletUsage,
   isClosedWalletChannel,
+  isProofTransportFailure,
 } from '../src/utils/contract';
 
 describe('wallet connection errors', () => {
@@ -42,5 +43,14 @@ describe('wallet connection errors', () => {
 
     expect(methods).toContain('getShieldedAddresses');
     expect(methods).toContain('submitTransaction');
+  });
+
+  it('recognizes a nested remote proof-server fetch failure', () => {
+    const error = new Error("'prove' returned an error", {
+      cause: new TypeError('Failed to fetch'),
+    });
+
+    expect(isProofTransportFailure(error)).toBe(true);
+    expect(isProofTransportFailure(new Error('Invalid proof'))).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import type {
   InitialAPI,
 } from '@midnight-ntwrk/dapp-connector-api';
 import { FetchZkConfigProvider } from '@midnight-ntwrk/midnight-js-fetch-zk-config-provider';
+import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
@@ -263,6 +264,22 @@ export function isClosedWalletChannel(error: unknown): boolean {
   );
 }
 
+export function isProofTransportFailure(error: unknown): boolean {
+  return /failed to fetch|networkerror|network request failed|load failed/i.test(
+    errorText(error),
+  );
+}
+
+function remoteProofServer(uri: string | undefined): string | null {
+  if (!uri) return null;
+  try {
+    const url = new URL(uri);
+    return url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 export function errorMessage(
   error: unknown,
   fallback = 'The operation did not complete.',
@@ -409,10 +426,24 @@ export async function buildProviders(
     zkConfigProvider.asKeyMaterialProvider(),
   );
   const baseProofProvider = createProofProvider(walletProver);
+  const proofServerUri = remoteProofServer(configuration?.proverServerUri);
+  const directProofProvider = proofServerUri
+    ? httpClientProofProvider(proofServerUri, zkConfigProvider)
+    : null;
   const proofProvider = {
-    proveTx: (...args: Parameters<typeof baseProofProvider.proveTx>) => {
+    proveTx: async (...args: Parameters<typeof baseProofProvider.proveTx>) => {
       emitStage('Generating the zero-knowledge proof');
-      return baseProofProvider.proveTx(...args);
+      try {
+        return await baseProofProvider.proveTx(...args);
+      } catch (error) {
+        // Lace 2.2.x can occasionally fail while proxying a remote proof-server
+        // request through its extension worker. Proving has no chain side effect,
+        // so retry the same operation once from the page against the remote server
+        // selected in Lace. Local HTTP provers stay delegated to the extension to
+        // avoid mixed-content restrictions on the HTTPS app.
+        if (!directProofProvider || !isProofTransportFailure(error)) throw error;
+        return directProofProvider.proveTx(...args);
+      }
     },
   };
   const coinPublicKey = parseCoinPublicKeyToHex(
