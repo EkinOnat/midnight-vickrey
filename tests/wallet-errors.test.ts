@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { errorMessage, isClosedWalletChannel } from '../src/utils/contract';
+import {
+  errorMessage,
+  hintWalletUsage,
+  isClosedWalletChannel,
+} from '../src/utils/contract';
 
 describe('wallet connection errors', () => {
   it('recognizes a Lace remote API that was shut down', () => {
@@ -20,5 +24,23 @@ describe('wallet connection errors', () => {
     });
 
     expect(errorMessage(error)).toContain('unlock Lace on Preprod');
+  });
+
+  it('continues when a wallet omits the optional usage-hint method', async () => {
+    await expect(hintWalletUsage({})).resolves.toBeUndefined();
+  });
+
+  it('sends usage hints when the wallet implements them', async () => {
+    let methods: readonly string[] = [];
+
+    await hintWalletUsage({
+      hintUsage(requested: readonly string[]) {
+        methods = requested;
+        return Promise.resolve();
+      },
+    });
+
+    expect(methods).toContain('getShieldedAddresses');
+    expect(methods).toContain('submitTransaction');
   });
 });

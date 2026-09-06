@@ -313,17 +313,35 @@ export async function connectWallet(
       `Switch ${wallet.name} to ${TARGET_NETWORK}; it reported ${status.networkId}.`,
     );
   }
-  await api
-    .hintUsage([
-      'getConfiguration',
-      'getShieldedAddresses',
-      'getUnshieldedAddress',
-      'getProvingProvider',
-      'balanceUnsealedTransaction',
-      'submitTransaction',
-    ])
-    .catch(() => undefined);
+  await hintWalletUsage(api);
   return { api, networkId: status.networkId };
+}
+
+const EXPECTED_WALLET_METHODS = [
+  'getConfiguration',
+  'getShieldedAddresses',
+  'getUnshieldedAddress',
+  'getProvingProvider',
+  'balanceUnsealedTransaction',
+  'submitTransaction',
+] as const;
+
+export async function hintWalletUsage(api: unknown): Promise<void> {
+  // Connector API v4 defines hintUsage, but some Lace builds return a
+  // connected object without it. Hints improve permission UX; they are not
+  // required for correctness, so keep connecting when the method is absent.
+  const hintUsage =
+    api && typeof api === 'object'
+      ? (api as { hintUsage?: unknown }).hintUsage
+      : undefined;
+  if (typeof hintUsage !== 'function') return;
+
+  try {
+    await hintUsage.call(api, [...EXPECTED_WALLET_METHODS]);
+  } catch {
+    // A wallet may reject or not support usage hints. Individual API calls
+    // below still enforce their own permissions and surface their errors.
+  }
 }
 
 export type CallStage =
