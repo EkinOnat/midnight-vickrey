@@ -22,9 +22,10 @@ public reserve price.
    equal to or greater than the reserve price.
 4. Select **Commit sealed bid** and approve the transaction in Lace. Keep the
    tab open while the wallet creates the zero-knowledge proof.
-5. When the transaction succeeds, copy the displayed private opening package.
-   Save it somewhere secure before clearing it from the screen. Losing this
-   package means the auction creator cannot include your bid in settlement.
+5. When the transaction succeeds, download the displayed private opening
+   package (or copy its JSON). Save it somewhere secure before clearing it from
+   the screen. Losing this package means the auction creator cannot include
+   your bid in settlement.
 6. Send the opening package only to the auction creator through a private
    channel. Do not post it publicly: it contains your bid amount and random
    salt.

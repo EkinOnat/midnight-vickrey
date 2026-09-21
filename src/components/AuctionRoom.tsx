@@ -171,6 +171,19 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
     }
   }
 
+  function downloadPackage(): void {
+    if (!openingPackage) return;
+    const blob = new Blob([JSON.stringify(openingPackage, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vickrey-opening-slot-${openingPackage.slot}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <main id="top">
       <section className="hero">
@@ -319,9 +332,22 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
             <div className="opening-package">
               <div>
                 <h3>Save this private opening</h3>
-                <button className="text-button" type="button" onClick={() => void copyPackage()}>
-                  {copied ? 'Copied' : 'Copy JSON'}
-                </button>
+                <div className="package-actions">
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={downloadPackage}
+                  >
+                    Download JSON
+                  </button>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => void copyPackage()}
+                  >
+                    {copied ? 'Copied' : 'Copy JSON'}
+                  </button>
+                </div>
               </div>
               <textarea
                 readOnly

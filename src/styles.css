@@ -222,6 +222,7 @@ dd { margin: 0; font-size: 15px; }
 .action-form input::placeholder, .action-form textarea::placeholder { color: #535b57; }
 .opening-package { margin: 24px 0 0; border: 1px solid #45533f; padding: 18px; background: rgba(201, 255, 85, 0.035); }
 .opening-package > div { display: flex; justify-content: space-between; align-items: center; }
+.opening-package .package-actions { display: flex; gap: 14px; align-items: center; }
 .opening-package textarea { margin: 12px 0; color: #cce8bd; }
 .opening-package > p { margin-bottom: 9px; }
 
