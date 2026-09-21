@@ -49,4 +49,32 @@ describe('settlement opening packages', () => {
       'Slot 0 has an invalid amount',
     );
   });
+
+  it('requires every package to identify the expected auction and contract', () => {
+    const missingContract = {
+      ...packageFor(0, '50', 'a'),
+      contract: undefined,
+    };
+    const wrongAuction = {
+      ...packageFor(1, '90', 'b'),
+      auctionId: 'another-auction',
+    };
+
+    expect(() =>
+      parseSettlementBook(
+        JSON.stringify([missingContract, packageFor(1, '90', 'b')]),
+        CONTRACT,
+        AUCTION,
+        2,
+      ),
+    ).toThrow('different contract');
+    expect(() =>
+      parseSettlementBook(
+        JSON.stringify([packageFor(0, '50', 'a'), wrongAuction]),
+        CONTRACT,
+        AUCTION,
+        2,
+      ),
+    ).toThrow('different auction');
+  });
 });

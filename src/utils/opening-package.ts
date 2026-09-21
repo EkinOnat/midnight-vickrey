@@ -46,10 +46,10 @@ export function parseSettlementBook(
       throw new Error('Each opening needs a unique valid slot number.');
     }
     if (seen.has(item.slot!)) throw new Error(`Slot ${item.slot} appears twice.`);
-    if (item.auctionId && item.auctionId !== expectedAuctionId) {
+    if (item.auctionId !== expectedAuctionId) {
       throw new Error(`Slot ${item.slot} belongs to a different auction.`);
     }
-    if (item.contract && item.contract !== expectedContract) {
+    if (item.contract !== expectedContract) {
       throw new Error(`Slot ${item.slot} belongs to a different contract.`);
     }
 

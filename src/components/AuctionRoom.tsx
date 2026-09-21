@@ -8,7 +8,6 @@ import {
   CONTRACT_ADDRESS,
   PRIVATE_STATE_ID,
   bytesToHex,
-  emptyBook,
   errorMessage,
   getBidderSecret,
   hexToBytes,
