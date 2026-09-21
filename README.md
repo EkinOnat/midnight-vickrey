@@ -143,4 +143,5 @@ reporting guidance, see [SECURITY.md](SECURITY.md).
 
 ## Product X Profile
 
-[PLACEHOLDER — add after creating the Vickrey product account]
+- [Vickrey on X (@_ekin_1_)](https://x.com/_ekin_1_)
+- [Launch post](https://x.com/_ekin_1_/status/2102011178381722024)
