@@ -204,6 +204,7 @@ dd { margin: 0; font-size: 15px; }
 
 .action-form { border-top: 1px solid var(--line); padding-top: 24px; }
 .action-form > p, .opening-package > p { color: var(--muted); font-size: 13px; line-height: 1.62; margin: 0 0 20px; }
+.action-form > .form-status { margin: 10px 0 0; color: #aeb8b2; font-size: 11px; }
 .action-form label { display: block; color: #b7c0bb; font-size: 11px; margin: 15px 0 8px; }
 .action-form input, .action-form textarea, .opening-package textarea {
   display: block;

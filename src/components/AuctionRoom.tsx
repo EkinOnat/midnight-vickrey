@@ -51,6 +51,15 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
     session.providers !== null;
   const open = session.auction?.phase === 'OPEN';
   const full = (session.auction?.bidCount ?? 4) >= 4;
+  const bidUnavailableReason = !connected
+    ? 'Connect Lace to submit a private bid.'
+    : !session.auction
+      ? 'Wait for the public auction state to load.'
+      : !open
+        ? 'This auction has already settled.'
+        : full
+          ? 'All four bid slots are committed.'
+          : null;
 
   async function refresh(): Promise<void> {
     setRefreshing(true);
@@ -323,9 +332,15 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
               className="button primary"
               type="submit"
               disabled={!connected || !open || full || action !== null}
+              aria-describedby={bidUnavailableReason ? 'bid-availability' : undefined}
             >
               {action === 'bid' ? 'Proving bid…' : 'Commit sealed bid'}
             </button>
+            {bidUnavailableReason ? (
+              <p className="form-status" id="bid-availability" role="status">
+                {bidUnavailableReason}
+              </p>
+            ) : null}
           </form>
 
           {openingPackage ? (
