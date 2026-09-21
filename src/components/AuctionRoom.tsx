@@ -33,6 +33,20 @@ interface Receipt {
 
 const MAX_UINT64 = (1n << 64n) - 1n;
 
+function downloadJson(filename: string, value: unknown): void {
+  const blob = new Blob([JSON.stringify(value, null, 2)], {
+    type: 'application/json',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function AuctionRoom({ session }: { session: MidnightSession }) {
   const [action, setAction] = useState<ActiveAction>(null);
   const [stage, setStage] = useState<CallStage | null>(null);
@@ -182,15 +196,26 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
 
   function downloadPackage(): void {
     if (!openingPackage) return;
-    const blob = new Blob([JSON.stringify(openingPackage, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `vickrey-opening-slot-${openingPackage.slot}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadJson(
+      `vickrey-opening-slot-${openingPackage.slot}.json`,
+      openingPackage,
+    );
+  }
+
+  function downloadResult(): void {
+    if (!session.auction || session.auction.phase !== 'SETTLED') return;
+    downloadJson(
+      `vickrey-result-${session.auction.auctionId.slice(0, 12)}.json`,
+      {
+        network: session.network,
+        contract: CONTRACT_ADDRESS,
+        auctionId: session.auction.auctionId,
+        bidCount: session.auction.bidCount,
+        winnerTag: session.auction.winnerTag,
+        clearingPrice: session.auction.clearingPrice?.toString(),
+        resultDigest: session.auction.resultDigest,
+      },
+    );
   }
 
   return (
@@ -287,6 +312,13 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
                   <small title={session.auction.resultDigest ?? undefined}>
                     result {shortHex(session.auction.resultDigest, 10)}
                   </small>
+                  <button
+                    className="text-button result-download"
+                    type="button"
+                    onClick={downloadResult}
+                  >
+                    Download result JSON
+                  </button>
                 </div>
               ) : null}
             </>

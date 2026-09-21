@@ -36,7 +36,9 @@ public reserve price.
    select **Prove & publish result**.
 9. Keep the tab open while the settlement proof is generated. When it is
    accepted, the **Public record** changes to `SETTLED` and displays the winner's
-   auction-specific tag, the second-highest price, and the result digest.
+   auction-specific tag, the second-highest price, and the result digest. Use
+   **Download result JSON** to save those public verification fields together
+   with the network, contract address, auction ID, and final bid count.
 
 ## What Gets Proved (and What Stays Private)
 

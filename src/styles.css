@@ -201,6 +201,7 @@ dd { margin: 0; font-size: 15px; }
 .result-card > div { display: flex; justify-content: space-between; padding: 10px 0; border-top: 1px solid rgba(201, 255, 85, 0.16); }
 .result-card span, .result-card small { color: var(--muted); font-size: 11px; }
 .result-card strong { font-size: 20px; color: var(--acid); }
+.result-card .result-download { display: block; margin-top: 16px; }
 
 .action-form { border-top: 1px solid var(--line); padding-top: 24px; }
 .action-form > p, .opening-package > p { color: var(--muted); font-size: 13px; line-height: 1.62; margin: 0 0 20px; }
