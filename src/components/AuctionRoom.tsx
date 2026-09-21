@@ -19,16 +19,12 @@ import {
   type BidOpening,
   type CallStage,
 } from '../utils/contract';
+import {
+  parseSettlementBook,
+  type OpeningPackage,
+} from '../utils/opening-package';
 
 type ActiveAction = 'bid' | 'settle' | null;
-
-interface OpeningPackage {
-  readonly contract: string;
-  readonly auctionId: string;
-  readonly slot: number;
-  readonly amount: string;
-  readonly salt: string;
-}
 
 interface Receipt {
   readonly kind: 'Bid committed' | 'Auction settled';
@@ -131,6 +127,7 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
       );
       const book = parseSettlementBook(
         String(values.get('packages')),
+        CONTRACT_ADDRESS,
         session.auction.auctionId,
         session.auction.bidCount,
       );
@@ -430,48 +427,4 @@ export function AuctionRoom({ session }: { session: MidnightSession }) {
       </section>
     </main>
   );
-}
-
-function parseSettlementBook(
-  source: string,
-  expectedAuctionId: string,
-  bidCount: number,
-): BidOpening[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(source);
-  } catch {
-    throw new Error('Opening packages must be a valid JSON array.');
-  }
-  if (!Array.isArray(parsed)) throw new Error('Paste a JSON array of opening packages.');
-  if (parsed.length !== bidCount) {
-    throw new Error(`Expected ${bidCount} opening packages, received ${parsed.length}.`);
-  }
-
-  const book = emptyBook();
-  const seen = new Set<number>();
-  for (const raw of parsed) {
-    if (!raw || typeof raw !== 'object') throw new Error('Each opening must be an object.');
-    const item = raw as Partial<OpeningPackage>;
-    if (!Number.isInteger(item.slot) || item.slot! < 0 || item.slot! >= bidCount) {
-      throw new Error('Each opening needs a unique valid slot number.');
-    }
-    if (seen.has(item.slot!)) throw new Error(`Slot ${item.slot} appears twice.`);
-    if (item.auctionId && item.auctionId !== expectedAuctionId) {
-      throw new Error(`Slot ${item.slot} belongs to a different auction.`);
-    }
-    if (item.contract && item.contract !== CONTRACT_ADDRESS) {
-      throw new Error(`Slot ${item.slot} belongs to a different contract.`);
-    }
-    const amount = BigInt(String(item.amount));
-    if (amount <= 0n || amount > MAX_UINT64) {
-      throw new Error(`Slot ${item.slot} has an invalid amount.`);
-    }
-    book[item.slot!] = {
-      amount,
-      salt: hexToBytes(String(item.salt), `Salt for slot ${item.slot}`),
-    };
-    seen.add(item.slot!);
-  }
-  return book;
 }
