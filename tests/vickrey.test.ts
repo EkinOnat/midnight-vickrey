@@ -10,6 +10,8 @@ const ADMIN = bytes(1);
 const ALICE = bytes(2);
 const BOB = bytes(3);
 const CAROL = bytes(4);
+const DAVE = bytes(5);
+const ERIN = bytes(6);
 
 const hex = (value: Uint8Array): string => Buffer.from(value).toString('hex');
 
@@ -42,6 +44,21 @@ describe('Vickrey commitment flow', () => {
     sim.submitBid();
     sim.switchBidder(ALICE, opening(30n, 22));
     expect(() => sim.submitBid()).toThrow();
+  });
+
+  it('enforces the four-bid circuit capacity', () => {
+    const sim = new VickreySimulator(ADMIN);
+    const bidders = [ALICE, BOB, CAROL, DAVE];
+
+    bidders.forEach((bidder, index) => {
+      sim.switchBidder(bidder, opening(BigInt(40 + index), 70 + index));
+      sim.submitBid();
+    });
+
+    expect(sim.getLedger().bidCount).toBe(4n);
+    sim.switchBidder(ERIN, opening(100n, 80));
+    expect(() => sim.submitBid()).toThrow();
+    expect(sim.getLedger().bidCount).toBe(4n);
   });
 });
 
@@ -109,5 +126,20 @@ describe('Vickrey private second-price settlement', () => {
 
     expect(() => sim.settle(CAROL, bids)).toThrow();
     expect(sim.phaseName()).toBe('OPEN');
+  });
+
+  it('makes settlement final and rejects later bids', () => {
+    const sim = new VickreySimulator(ADMIN);
+    const bids = [opening(40n, 81), opening(50n, 82)];
+    sim.switchBidder(ALICE, bids[0]);
+    sim.submitBid();
+    sim.switchBidder(BOB, bids[1]);
+    sim.submitBid();
+    sim.settle(ADMIN, bids);
+
+    expect(() => sim.settle(ADMIN, bids)).toThrow();
+    sim.switchBidder(CAROL, opening(60n, 83));
+    expect(() => sim.submitBid()).toThrow();
+    expect(sim.phaseName()).toBe('SETTLED');
   });
 });
