@@ -138,6 +138,9 @@ frontend build. The badge at the top of this README links to the workflow.
 
 See [docs/USAGE.md](docs/USAGE.md).
 
+For the prototype's trust assumptions, sensitive-data handling, and private
+reporting guidance, see [SECURITY.md](SECURITY.md).
+
 ## Product X Profile
 
 [PLACEHOLDER — add after creating the Vickrey product account]
