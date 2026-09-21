@@ -100,6 +100,34 @@ describe('Vickrey private second-price settlement', () => {
     );
   });
 
+  it('binds the result digest to the auction, winner, price, and bid count', () => {
+    const sim = new VickreySimulator(ADMIN);
+    const bids = [opening(65n, 44), opening(90n, 45), opening(75n, 46)];
+    sim.switchBidder(ALICE, bids[0]);
+    sim.submitBid();
+    sim.switchBidder(BOB, bids[1]);
+    sim.submitBid();
+    sim.switchBidder(CAROL, bids[2]);
+    sim.submitBid();
+
+    const state = sim.settle(ADMIN, bids);
+    const expected = pureCircuits.publicResultDigest(
+      state.auctionId,
+      state.winnerTag,
+      state.clearingPrice,
+      state.bidCount,
+    );
+    const alteredPrice = pureCircuits.publicResultDigest(
+      state.auctionId,
+      state.winnerTag,
+      state.clearingPrice + 1n,
+      state.bidCount,
+    );
+
+    expect(hex(state.resultDigest)).toBe(hex(expected));
+    expect(hex(state.resultDigest)).not.toBe(hex(alteredPrice));
+  });
+
   it('rejects a forged opening and leaves the auction open', () => {
     const sim = new VickreySimulator(ADMIN);
     const aliceBid = opening(45n, 51);
